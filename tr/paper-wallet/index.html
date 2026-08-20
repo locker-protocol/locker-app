@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="tr" dir="ltr" data-critters-container>
+
+<head>
+  <meta charset="utf-8">
+  <!-- M-6n: Content-Security-Policy. connect-src stays broad (https:/wss: + localhost) because
+       RPC endpoints are user-configurable and Cypress/hardhat run over http://localhost. The hard
+       value here is object-src 'none' + base-uri/form-action/frame-ancestors locking. script-src
+       keeps 'unsafe-inline'/'unsafe-eval' because of the inline Node polyfill below and the QR
+       libraries - externalizing the polyfill + hashing it to drop 'unsafe-inline' is a prod follow-up.
+       img-src allows blob: for the wallet picker: AppKit fetches each wallet logo and hands it to
+       the DOM as a blob URL, so without it every logo renders broken. No extra origin is reached -
+       the bytes were already fetched under the existing https: allowance.
+       font-src deliberately does NOT list fonts.reown.com: AppKit hardcodes a webfont there, and
+       this project keeps UI assets local. The picker falls back to the system font stack. -->
+
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss: http://localhost:* ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+  <title>Kağıt yedek | ERC-20 Locker Protocol</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512x512.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+
+  <!-- SEO: Primary Meta Tags -->
+  <meta name="description" content="Kasanızın gösterdiği şifreli yedek QR'ını tarayın ve yazdırın — kasa hiçbir zaman yazıcıya dokunmaz.">
+  <meta name="keywords" content="ERC-20 Locker Protocol, Locker Protocol, token lock, vesting, DeFi, smart contract, multi-signature, air-gapped wallet, Ethereum, Arbitrum, Base, Polygon, crypto security, non-custodial">
+  <meta name="author" content="ERC-20 Locker Protocol">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / Facebook / Discord / Telegram -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ERC-20 Locker Protocol">
+  <meta property="og:title" content="Kağıt yedek | ERC-20 Locker Protocol">
+  <meta property="og:description" content="Kasanızın gösterdiği şifreli yedek QR'ını tarayın ve yazdırın — kasa hiçbir zaman yazıcıya dokunmaz.">
+  <meta property="og:url" content="https://app.lockerprotocol.com/tr/paper-wallet/">
+  <meta property="og:image" content="https://app.lockerprotocol.com/assets/image/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="ERC-20 Locker Protocol - Non-Custodial Token Lock &amp; Vesting Protocol">
+  <meta property="og:locale" content="tr_TR">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kağıt yedek | ERC-20 Locker Protocol">
+  <meta name="twitter:description" content="Kasanızın gösterdiği şifreli yedek QR'ını tarayın ve yazdırın — kasa hiçbir zaman yazıcıya dokunmaz.">
+  <meta name="twitter:image" content="https://app.lockerprotocol.com/assets/image/og-cover.png">
+  <meta name="twitter:image:alt" content="ERC-20 Locker Protocol - Non-Custodial Token Lock &amp; Vesting Protocol">
+
+  <!-- Structured Data: WebSite (tells Google the site name instead of showing domain) -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "ERC-20 Locker Protocol",
+  "alternateName": [
+    "Locker Protocol",
+    "Locker",
+    "LockerProtocol"
+  ],
+  "url": "https://app.lockerprotocol.com/tr/",
+  "description": "Kasanızın gösterdiği şifreli yedek QR'ını tarayın ve yazdırın — kasa hiçbir zaman yazıcıya dokunmaz.",
+  "publisher": {
+    "@type": "Organization",
+    "name": "ERC-20 Locker Protocol",
+    "url": "https://app.lockerprotocol.com/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://app.lockerprotocol.com/assets/icons/icon-512x512.png"
+    }
+  },
+  "inLanguage": "tr"
+}
+  </script>
+  <style>
+    /* Global splash pre-loader: painted from the inline HTML on first paint (before the
+       Angular bundle loads), then removed automatically when Angular renders <app-root>.
+       The logo is inline SVG (no request, no <base href> dependency, works air-gapped),
+       which is why there is no white flash while the app boots. Allowed by the CSP
+       style-src 'unsafe-inline'. */
+    .global-splash-screen {
+      position: fixed; inset: 0; background: #ffffff;
+      display: flex; align-items: center; justify-content: center; z-index: 99999;
+    }
+    .splash-spinner-container {
+      position: relative; width: 120px; height: 120px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .splash-logo { width: 60px; height: 60px; position: absolute; z-index: 10; }
+    .splash-ring {
+      position: absolute; width: 100%; height: 100%; border-radius: 50%;
+      border: 4px solid #f3f4f6; border-top-color: #7c3aed; border-right-color: #3b82f6;
+      animation: splash-spin 2.5s cubic-bezier(0.68, -0.15, 0.265, 1.15) infinite;
+    }
+    @keyframes splash-spin {
+      0% { transform: rotate(0deg); }
+      50% { transform: rotate(360deg); animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1); }
+      100% { transform: rotate(720deg); }
+    }
+  </style>
+<style>*,:before,:after{--tw-border-spacing-x: 0;--tw-border-spacing-y: 0;--tw-translate-x: 0;--tw-translate-y: 0;--tw-rotate: 0;--tw-skew-x: 0;--tw-skew-y: 0;--tw-scale-x: 1;--tw-scale-y: 1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness: proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width: 0px;--tw-ring-offset-color: #fff;--tw-ring-color: rgb(59 130 246 / .5);--tw-ring-offset-shadow: 0 0 #0000;--tw-ring-shadow: 0 0 #0000;--tw-shadow: 0 0 #0000;--tw-shadow-colored: 0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }*,:before,:after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e2e8f0}:before,:after{--tw-content: ""}html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:Inter,system-ui,sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}svg{display:block;vertical-align:middle}body{--tw-bg-opacity: 1;background-color:rgb(248 250 252 / var(--tw-bg-opacity, 1));--tw-text-opacity: 1;color:rgb(15 23 42 / var(--tw-text-opacity, 1));-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+</style><link rel="stylesheet" href="styles-EPWVV7L6.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="styles-EPWVV7L6.css"></noscript><link rel="modulepreload" href="chunk-CZ3UQZNV.js"><link rel="modulepreload" href="chunk-O2FHQJGR.js"><link rel="modulepreload" href="chunk-HLJHGBKW.js"><link rel="modulepreload" href="chunk-YBT4YOIL.js"><link rel="modulepreload" href="chunk-6JSSNFEV.js"><link rel="modulepreload" href="chunk-LPDL2OXW.js"><link rel="modulepreload" href="chunk-MA5HND5E.js"><link rel="modulepreload" href="chunk-FYNU62OT.js"><link rel="modulepreload" href="chunk-KLSQKNVM.js"><link rel="modulepreload" href="chunk-W63NIZE7.js"><link rel="modulepreload" href="chunk-Z3WACKFW.js"><link rel="modulepreload" href="chunk-YY3JGW3Y.js"><link rel="modulepreload" href="chunk-BSPRPYJP.js"><link rel="modulepreload" href="chunk-WL374SPU.js"><link rel="modulepreload" href="chunk-6OHL2VY6.js"><link rel="modulepreload" href="chunk-V7NHQLFS.js"><link rel="modulepreload" href="chunk-EH747NQR.js"><link rel="modulepreload" href="chunk-YQ6CGEEH.js"><link rel="modulepreload" href="chunk-DX3HP7D2.js"><link rel="modulepreload" href="chunk-MU4HDQWI.js"><link rel="modulepreload" href="chunk-UPIM6NWB.js"><link rel="modulepreload" href="chunk-ABDLVJD5.js"><link rel="modulepreload" href="chunk-OERSU4S2.js">  <link rel="canonical" href="https://app.lockerprotocol.com/tr/paper-wallet/">
+  <link rel="alternate" hreflang="en" href="https://app.lockerprotocol.com/paper-wallet/">
+  <link rel="alternate" hreflang="fr" href="https://app.lockerprotocol.com/fr/paper-wallet/">
+  <link rel="alternate" hreflang="zh" href="https://app.lockerprotocol.com/zh/paper-wallet/">
+  <link rel="alternate" hreflang="es" href="https://app.lockerprotocol.com/es/paper-wallet/">
+  <link rel="alternate" hreflang="ar" href="https://app.lockerprotocol.com/ar/paper-wallet/">
+  <link rel="alternate" hreflang="de" href="https://app.lockerprotocol.com/de/paper-wallet/">
+  <link rel="alternate" hreflang="he" href="https://app.lockerprotocol.com/he/paper-wallet/">
+  <link rel="alternate" hreflang="hi" href="https://app.lockerprotocol.com/hi/paper-wallet/">
+  <link rel="alternate" hreflang="id" href="https://app.lockerprotocol.com/id/paper-wallet/">
+  <link rel="alternate" hreflang="it" href="https://app.lockerprotocol.com/it/paper-wallet/">
+  <link rel="alternate" hreflang="ja" href="https://app.lockerprotocol.com/ja/paper-wallet/">
+  <link rel="alternate" hreflang="ko" href="https://app.lockerprotocol.com/ko/paper-wallet/">
+  <link rel="alternate" hreflang="pt" href="https://app.lockerprotocol.com/pt/paper-wallet/">
+  <link rel="alternate" hreflang="ru" href="https://app.lockerprotocol.com/ru/paper-wallet/">
+  <link rel="alternate" hreflang="tr" href="https://app.lockerprotocol.com/tr/paper-wallet/">
+  <link rel="alternate" hreflang="vi" href="https://app.lockerprotocol.com/vi/paper-wallet/">
+  <link rel="alternate" hreflang="x-default" href="https://app.lockerprotocol.com/paper-wallet/">
+</head>
+
+<body>
+  <!-- Browser polyfills for Node.js globals (required by html5-qrcode / zxing-js) -->
+  <script>
+    var global = global || window;
+    var process = process || { env: {} };
+  </script>
+  <app-root>
+    <div class="global-splash-screen" aria-label="Loading Application">
+      <div class="splash-spinner-container">
+        <div class="splash-ring"></div>
+        <svg class="splash-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M 35 15 H 15 V 35 M 65 15 H 85 V 35 M 35 85 H 15 V 65 M 65 85 H 85 V 65" fill="none" stroke="#1E293B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 35 15 H 15 V 35 M 65 15" fill="none" stroke="#9900CC" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 65 85 H 85 V 65" fill="none" stroke="#9900CC" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 30 30 V 69" fill="none" stroke="#1E293B" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 40 22 V 78" fill="none" stroke="#9900CC" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 50 22 V 78" fill="none" stroke="#1E293B" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 60 22 V 78" fill="none" stroke="#9900CC" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 70 30 V 69" fill="none" stroke="#1E293B" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+  </app-root>
+<script src="polyfills-FFHMD2TL.js" type="module"></script><script src="main-IDMV3XKJ.js" type="module"></script></body>
+
+</html>
